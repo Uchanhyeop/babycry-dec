@@ -6,12 +6,12 @@ let meydaAnalyzer = null;
 let micStream = null;
 
 // MFCC 전처리 파라미터
-const SAMPLE_RATE = 16000;    // 모델 학습 시 16kHz 기준
+const SAMPLE_RATE = 16000;    // 모델 학습 시 샘플레이트
 const FFT_SIZE = 1024;
 const HOP_SIZE = 512;
 const NUM_MEL_BINS = 40;
 const NUM_MFCC = 40;
-// 1초 분량(16000샘플)에서 얻을 수 있는 슬라이스 수 계산
+// 1초 분량(16000샘플)에서 얻을 수 있는 슬라이스 수
 const MFCC_SLICES = Math.floor((SAMPLE_RATE - FFT_SIZE) / HOP_SIZE) + 1; // ≈30
 
 // HTML 요소
@@ -24,11 +24,21 @@ const stopBtn = document.getElementById("stop-btn");
 let mfccBuffer = [];
 
 /**
- * 1) TFLite 모델 로드
+ * 1) TFLite WASM 경로 설정 & 모델 로드
  */
 async function loadTFLiteModel() {
-  statusEl.innerText = "TFLite 모델 로딩 중…";
+  statusEl.innerText = "WASM 모듈 초기화 중…";
+
+  // tfjs-tflite.js가 로드된 뒤에만 tflite 변수가 정의됩니다.
+  // 반드시 여기서 setWasmPath()를 호출하여, .wasm 파일 위치를 명시해야 Module._malloc 오류가 안 납니다.
+  // 버전에 맞춰 URL을 복사해주세요.
+  tflite.setWasmPath(
+    "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1/dist/tfjs-tflite.wasm"
+  );
+
   try {
+    statusEl.innerText = "TFLite 모델 로딩 중…";
+    // 모델을 로드할 때 await를 사용해서, 완전히 초기화된 뒤에만 다음 코드가 실행되게 함
     tfliteModel = await tflite.loadTFLiteModel("baby_cry_model.tflite");
     console.log("tfliteModel:", tfliteModel);
     statusEl.innerText = "모델 로드 완료! 마이크 시작 가능.";
@@ -39,7 +49,7 @@ async function loadTFLiteModel() {
   }
 }
 
-// 페이지 로드 후 모델 먼저 불러오기
+// 페이지 DOMContentLoaded 이벤트 후 모델 로드 시작
 window.addEventListener("DOMContentLoaded", () => {
   loadTFLiteModel();
 });
@@ -48,14 +58,13 @@ window.addEventListener("DOMContentLoaded", () => {
  * 2) 마이크 시작
  */
 async function startMicrophone() {
-  // 모델이 준비되지 않았다면 대기
+  // 모델이 준비되지 않았다면 경고 후 리턴
   if (tfliteModel === null) {
     alert("모델 로드가 아직 완료되지 않았습니다.");
     return;
   }
-  if (audioContext) {
-    return;
-  }
+  if (audioContext) return; // 이미 실행 중이면 아무 작업 안 함
+
   // AudioContext 생성
   audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -75,11 +84,11 @@ async function startMicrophone() {
     source: sourceNode,
     bufferSize: FFT_SIZE,
     hopSize: HOP_SIZE,
-    sampleRate: SAMPLE_RATE, // Meyda 내부에서 리샘플링 가능
+    sampleRate: SAMPLE_RATE, // Meyda 내부에서 리샘플링
     featureExtractors: ["mfcc"],
     numberOfMFCCCoefficients: NUM_MFCC,
     melBands: NUM_MEL_BINS,
-    callback: onMeydaFeatures
+    callback: onMeydaFeatures,
   });
 
   meydaAnalyzer.start();
@@ -93,18 +102,20 @@ async function startMicrophone() {
  */
 async function onMeydaFeatures(features) {
   if (!features || !features.mfcc) return;
-  // 모델이 로드되지 않았다면 건너뜀
+  // 모델이 로드되지 않았다면 예측 로직을 건너뜀
   if (tfliteModel === null) return;
 
-  // MFCC 40차원 배열을 버퍼에 추가
+  // 40차원 MFCC를 mfccBuffer 배열에 이어붙임
   mfccBuffer.push(...features.mfcc);
 
   // 충분한 슬라이스가 모였으면 예측 수행
   if (mfccBuffer.length >= MFCC_SLICES * NUM_MFCC) {
     // 1D Float32Array로 변환
-    const inputArray = new Float32Array(mfccBuffer.slice(0, MFCC_SLICES * NUM_MFCC));
+    const inputArray = new Float32Array(
+      mfccBuffer.slice(0, MFCC_SLICES * NUM_MFCC)
+    );
     try {
-      // TFLite 예측: 모델에 따라 입력 형태(shape)를 조정해야 할 수 있음
+      // TFLite 예측: outputTensor는 Float32Array 형태
       const outputTensor = tfliteModel.predict(inputArray);
       const prob = outputTensor[0]; // 예: [0] 번째가 울음 확률
       resultEl.innerText = `울음 확률: ${prob.toFixed(3)}`;
@@ -130,7 +141,7 @@ function stopMicrophone() {
     audioContext = null;
   }
   if (micStream) {
-    micStream.getTracks().forEach(track => track.stop());
+    micStream.getTracks().forEach((track) => track.stop());
     micStream = null;
   }
   statusEl.innerText = "마이크 중지됨";
