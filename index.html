@@ -30,13 +30,16 @@
   <button id="stop-btn" disabled>마이크 중지</button>
   <div id="result">–</div>
 
-  <!-- TensorFlow.js core (버전 명시) -->
+  <!-- 1) TensorFlow.js core (버전 명시) -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.8.0/dist/tf.min.js"></script>
-  <!-- TFLite WebAssembly 인터프리터 (버전 명시) -->
+
+  <!-- 2) TFLite WebAssembly 인터프리터 (버전 명시) -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1/dist/tf-tflite.js"></script>
-  <!-- Meyda (브라우저 오디오 전처리 라이브러리) -->
+
+  <!-- 3) Meyda (브라우저 오디오 전처리 라이브러리) -->
   <script src="https://unpkg.com/meyda/dist/web/meyda.min.js"></script>
-  <!-- 우리의 로직 -->
+
+  <!-- 4) 우리의 로직 -->
   <script src="app.js"></script>
 </body>
 </html>
